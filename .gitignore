@@ -1,0 +1,52 @@
+######################
+# Node / JS general  #
+######################
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+######################
+# Builds y bundles   #
+######################
+dist/
+build/
+coverage/
+
+######################
+# Vite / React       #
+######################
+.vite/
+frontend/node_modules/
+frontend/dist/
+
+######################
+# Backend Node       #
+######################
+backend/node_modules/
+backend/dist/
+
+######################
+# Sistema / OS       #
+######################
+.DS_Store
+Thumbs.db
+desktop.ini
+
+######################
+# Entornos / claves  #
+######################
+.env
+.env.*
+frontend/.env
+backend/.env
+
+######################
+# Editor / IDE       #
+######################
+.vscode/
+.idea/
+*.swp
+*.swo
+
