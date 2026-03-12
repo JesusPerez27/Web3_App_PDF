@@ -1,4 +1,6 @@
 const { ethers } = require('ethers');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Servicio para interactuar con el smart contract PdfRegistry en Sepolia
@@ -14,10 +16,6 @@ const { ethers } = require('ethers');
 
 */
 
-const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL;
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-
 // ABI del contrato PdfRegistry (solo las funciones que usamos)
 const CONTRACT_ABI = [
   "function registerDocument(bytes32 _fileHash, string calldata _ipfsCid) public",
@@ -28,33 +26,21 @@ const CONTRACT_ABI = [
   "event DocumentRevoked(bytes32 indexed fileHash, address indexed revoker, uint256 timestamp)"
 ];
 
-// Validar configuración
-if (!SEPOLIA_RPC_URL) {
-  console.warn('⚠️  SEPOLIA_RPC_URL no está configurado en las variables de entorno');
-}
-if (!PRIVATE_KEY) {
-  console.warn('⚠️  PRIVATE_KEY no está configurado en las variables de entorno');
-}
-if (!CONTRACT_ADDRESS) {
-  console.warn('⚠️  CONTRACT_ADDRESS no está configurado en las variables de entorno');
-}
-
 /**
- * Inicializa el proveedor, wallet y contrato
- * @returns {Object} - { provider, wallet, contract }
+ * Inicializa el proveedor, wallet y contrato leyendo env en cada llamada
+ * (así siempre se usa el contrato configurado en backend/.env, incluso tras reinicio)
  */
 function initializeWeb3() {
+  const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL;
+  const PRIVATE_KEY = process.env.PRIVATE_KEY;
+  const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
+
   if (!SEPOLIA_RPC_URL || !PRIVATE_KEY || !CONTRACT_ADDRESS) {
-    throw new Error('Faltan variables de entorno para Web3: SEPOLIA_RPC_URL, PRIVATE_KEY, CONTRACT_ADDRESS');
+    throw new Error('Faltan variables de entorno para Web3: SEPOLIA_RPC_URL, PRIVATE_KEY, CONTRACT_ADDRESS. Revisa backend/.env');
   }
 
-  // Crear proveedor
   const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
-
-  // Crear wallet con la clave privada
   const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-
-  // Crear instancia del contrato
   const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, wallet);
 
   return { provider, wallet, contract };
@@ -149,7 +135,79 @@ async function revokeDocument(fileHash) {
 }
 
 /**
- * Consulta la información de un documento por su hash
+ * Consulta un documento en un contrato concreto (solo lectura, no requiere wallet)
+ */
+async function getDocumentByHashAtAddress(fileHash, contractAddress) {
+  const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL;
+  if (!SEPOLIA_RPC_URL || !contractAddress) return null;
+  const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+  const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
+  const fileHashBytes32 = '0x' + fileHash.toString('hex');
+  const result = await contract.getDocumentByHash(fileHashBytes32);
+  return {
+    fileHash: result[0],
+    ipfsCid: result[1],
+    issuer: result[2],
+    timestamp: result[3],
+    status: Number(result[4]),
+    _contractAddress: contractAddress
+  };
+}
+
+/**
+ * Lista de direcciones de contrato para verificación.
+ * Se obtiene automáticamente de frontend/deployments/*.json (todos los deploys)
+ * y de CONTRACT_ADDRESS en .env. Así no hace falta configurar nada a mano.
+ */
+function getVerifyContractAddresses() {
+  const current = (process.env.CONTRACT_ADDRESS || '').trim();
+  const seen = new Set();
+  const list = [];
+
+  if (current) {
+    list.push(current);
+    seen.add(current.toLowerCase());
+  }
+
+  const deploymentsDir = path.join(__dirname, '..', '..', 'frontend', 'deployments');
+  try {
+    if (fs.existsSync(deploymentsDir)) {
+      const files = fs.readdirSync(deploymentsDir);
+      for (const file of files) {
+        if (!file.endsWith('.json') || file.includes('-abi.')) continue;
+        const filePath = path.join(deploymentsDir, file);
+        try {
+          const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+          const addr = data.contractAddress || data.contract_address;
+          if (addr && typeof addr === 'string') {
+            const a = addr.trim();
+            if (a.length === 42 && !seen.has(a.toLowerCase())) {
+              seen.add(a.toLowerCase());
+              list.push(a);
+            }
+          }
+        } catch (e) {
+          // ignorar archivos que no sean de deployment
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ No se pudo leer frontend/deployments:', e.message);
+  }
+
+  const fromEnv = (process.env.CONTRACT_ADDRESSES_VERIFY || '').split(',').map(s => s.trim()).filter(Boolean);
+  for (const a of fromEnv) {
+    if (a.length === 42 && !seen.has(a.toLowerCase())) {
+      seen.add(a.toLowerCase());
+      list.push(a);
+    }
+  }
+
+  return list;
+}
+
+/**
+ * Consulta la información de un documento por su hash (solo contrato actual)
  * 
  * @param {Buffer} fileHash - Hash SHA-256 del PDF (32 bytes)
  * @returns {Promise<Object>} - Información del documento
@@ -161,28 +219,58 @@ async function getDocumentByHash(fileHash) {
     console.log('🔍 Consultando documento en blockchain...');
     console.log('   Hash:', '0x' + fileHash.toString('hex'));
 
-    // Convertir Buffer a bytes32
     const fileHashBytes32 = '0x' + fileHash.toString('hex');
-
-    // Llamar a la función getDocumentByHash (view function, no cuesta gas)
     const result = await contract.getDocumentByHash(fileHashBytes32);
 
-    // result es un array: [fileHash, ipfsCid, issuer, timestamp, status]
     const documentInfo = {
       fileHash: result[0],
       ipfsCid: result[1],
       issuer: result[2],
       timestamp: result[3],
-      status: Number(result[4]) // 0: Inexistente, 1: Activo, 2: Revocado
+      status: Number(result[4])
     };
 
     console.log('📋 Documento encontrado:', documentInfo);
-
     return documentInfo;
 
   } catch (error) {
     console.error('❌ Error al consultar documento:', error);
     throw new Error(`Error al consultar blockchain: ${error.message}`);
+  }
+}
+
+/**
+ * Busca un documento en el contrato actual y en todos los contratos anteriores.
+ * Así, aunque hagas nuevos deploys, los PDFs registrados en contratos viejos siguen saliendo como Válidos.
+ * 
+ * @param {Buffer} fileHash - Hash SHA-256 del PDF (32 bytes)
+ * @returns {Promise<Object>} - Información del documento (del primer contrato donde exista)
+ */
+async function getDocumentByHashAny(fileHash) {
+  const addresses = getVerifyContractAddresses();
+  if (!addresses.length) {
+    throw new Error('No hay contratos para verificar. Revisa CONTRACT_ADDRESS en backend/.env y que exista frontend/deployments/ con al menos un JSON de deploy.');
+  }
+
+  console.log('🔍 Verificando documento en', addresses.length, 'contrato(s)...');
+
+  for (const addr of addresses) {
+    try {
+      const doc = await getDocumentByHashAtAddress(fileHash, addr);
+      if (doc && doc.status !== 0) {
+        console.log('📋 Documento encontrado en contrato', addr.slice(0, 10) + '...');
+        return doc;
+      }
+    } catch (e) {
+      console.warn('   Sin resultado en', addr.slice(0, 10) + '...');
+    }
+  }
+
+  try {
+    const doc = await getDocumentByHashAtAddress(fileHash, addresses[0]);
+    return doc || { fileHash: '0x', ipfsCid: '', issuer: null, timestamp: null, status: 0 };
+  } catch (e) {
+    return { fileHash: '0x', ipfsCid: '', issuer: null, timestamp: null, status: 0 };
   }
 }
 
@@ -238,6 +326,8 @@ module.exports = {
   registerDocument,
   revokeDocument,
   getDocumentByHash,
+  getDocumentByHashAny,
+  getVerifyContractAddresses,
   isValid,
   getBalance
 };

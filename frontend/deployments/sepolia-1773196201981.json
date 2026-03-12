@@ -1,0 +1,11 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "contractName": "PdfRegistry",
+  "contractAddress": "0x3D129917a3554E4e06946dc8C983dDd8Dd136463",
+  "deployer": "0x4677eB35D03aFB53AF73e298360C4E5A10CBb960",
+  "transactionHash": "0x1d94f91663d922ad7726fb8bc2013e8353498dbbbd2940bba6cb3c5a5b48b993",
+  "gasLimit": "569775",
+  "timestamp": "2026-03-11T02:30:01.616Z",
+  "blockNumber": 10424275
+}

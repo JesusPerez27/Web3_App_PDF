@@ -1,11 +1,11 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const pdfService = require('./pdfService');
 const pinataService = require('./pinataService');
 const web3Service = require('./web3Service');
-
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -77,26 +77,30 @@ app.post('/documents', async (req, res) => {
 // Endpoint POST /verify - Flujo B: Verificación de PDF
 app.post('/verify', async (req, res) => {
   try {
-    const { fileHashHex } = req.body;
+    let { fileHashHex } = req.body;
+    if (typeof fileHashHex === 'string') fileHashHex = fileHashHex.trim();
 
     if (!fileHashHex || typeof fileHashHex !== 'string') {
       return res.status(400).json({ error: 'Se requiere fileHashHex en el cuerpo de la petición' });
     }
 
-    const hex = fileHashHex.startsWith('0x') ? fileHashHex.slice(2) : fileHashHex;
+    const hex = fileHashHex.startsWith('0x') ? fileHashHex.slice(2).trim() : fileHashHex.trim();
     if (hex.length !== 64 || !/^[0-9a-fA-F]+$/.test(hex)) {
       return res.status(400).json({ error: 'fileHashHex debe ser un hash SHA-256 en hexadecimal (64 caracteres)' });
     }
 
     const fileHash = Buffer.from(hex, 'hex');
 
-    const doc = await web3Service.getDocumentByHash(fileHash);
+    const doc = await web3Service.getDocumentByHashAny(fileHash);
 
     const statusMap = { 0: 'No registrado', 1: 'Válido', 2: 'Revocado' };
     const statusText = statusMap[doc.status] ?? 'Desconocido';
     const ipfsUrl = doc.ipfsCid
       ? `https://gateway.pinata.cloud/ipfs/${doc.ipfsCid}`
       : null;
+
+    const contractAddr = doc._contractAddress || process.env.CONTRACT_ADDRESS || '';
+    const contractAddressMasked = contractAddr ? `${contractAddr.slice(0, 10)}...${contractAddr.slice(-8)}` : null;
 
     return res.json({
       fileHashHex,
@@ -105,7 +109,8 @@ app.post('/verify', async (req, res) => {
       timestamp: doc.timestamp ? Number(doc.timestamp) : null,
       status: statusText,
       ipfsUrl,
-      isValid: doc.status === 1
+      isValid: doc.status === 1,
+      contractAddressMasked
     });
   } catch (err) {
     console.error('❌ Error en POST /verify:', err);
@@ -115,4 +120,10 @@ app.post('/verify', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Servidor backend en http://localhost:${PORT}`);
+  const addresses = web3Service.getVerifyContractAddresses();
+  if (addresses.length) {
+    console.log(`📋 Verificación: ${addresses.length} contrato(s) (actual + anteriores). Los PDFs registrados siempre saldrán como Válidos.`);
+  } else {
+    console.warn('⚠️  CONTRACT_ADDRESS no configurado en .env; la verificación fallará hasta que lo configures.');
+  }
 });

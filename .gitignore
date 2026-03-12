@@ -39,8 +39,16 @@ desktop.ini
 ######################
 .env
 .env.*
+!.env.example
+!**/.env.example
 frontend/.env
 backend/.env
+
+######################
+# Hardhat (frontend) #
+######################
+frontend/artifacts/
+frontend/cache/
 
 ######################
 # Editor / IDE       #
