@@ -4,9 +4,9 @@ Vercel solo sirve el **frontend** (React + Vite). El **backend** (Node/Express) 
 
 ## 1. Tener el backend en internet
 
-Antes de Vercel, despliega el backend y anota la URL, por ejemplo:
+Tu API en Render (ejemplo de este proyecto):
 
-`https://web3-pdf-registry-backend.onrender.com`
+`https://web3-app-pdf.onrender.com`
 
 En las variables de entorno del backend pon las mismas que en local: `SEPOLIA_RPC_URL`, `PRIVATE_KEY`, `CONTRACT_ADDRESS`, `PINATA_JWT`.
 
@@ -15,12 +15,12 @@ En las variables de entorno del backend pon las mismas que en local: `SEPOLIA_RP
 1. Entra en [vercel.com](https://vercel.com) e inicia sesión.
 2. **Add New… → Project**.
 3. **Import** el repositorio `JesusPerez27/Web3_App_PDF` (u otro).
-4. En **Configure Project**:
-   - Si usas el `vercel.json` de la raíz del repo, Vercel puede detectar solo “Other”. Revisa que el **Build Command** sea:  
-     `cd frontend && npm install && npm run build`  
-     y **Output Directory**: `frontend/dist`  
-     Si no aparece, configúralo a mano en **Settings → General → Build & Development Settings**.
-   - **Alternativa más simple:** en **Root Directory** elige `frontend`, deja el preset **Vite**, Build `npm run build`, Output `dist`.
+4. En **Configure Project** deja la **raíz del repo** (no pongas Root Directory en `frontend` si quieres usar el `vercel.json` de la raíz). Vercel leerá:
+   - **Install Command:** `cd frontend && npm install`
+   - **Build Command:** `cd frontend && npm run build`
+   - **Output Directory:** `frontend/dist`  
+   Si no se rellenan solos, ve a **Settings → General → Build & Development Settings** y cópialos ahí.
+   - **Alternativa:** Root Directory = `frontend`, Framework **Vite**, Build `npm run build`, Output `dist` (entonces puedes borrar o ignorar overrides del `vercel.json`).
 
 ## 3. Variable de entorno en Vercel (obligatoria)
 
@@ -28,9 +28,9 @@ En el proyecto → **Settings → Environment Variables**:
 
 | Nombre | Valor | Entornos |
 |--------|--------|----------|
-| `VITE_BACKEND_URL` | `https://tu-backend.onrender.com` | Production (y Preview si quieres) |
+| `VITE_BACKEND_URL` | `https://web3-app-pdf.onrender.com` | Production (y Preview si quieres) |
 
-Sin `https://`, sin barra al final.
+Con **`https://`**, **sin** barra al final (`/`), sin espacios.
 
 **Importante:** las variables `VITE_*` se “hornan” en el build. Tras cambiarlas, haz **Redeploy** (Deployments → … → Redeploy).
 
