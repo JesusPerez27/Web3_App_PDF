@@ -14,6 +14,20 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// Raíz: evita "Cannot GET /" al abrir la URL del servicio en el navegador
+app.get('/', (req, res) => {
+  res.json({
+    name: 'Web3 PDF Registry API',
+    status: 'running',
+    endpoints: {
+      health: 'GET /health',
+      emitir: 'POST /documents',
+      verificar: 'POST /verify'
+    },
+    hint: 'El frontend (Vercel) debe usar esta URL como VITE_BACKEND_URL'
+  });
+});
+
 // Endpoint de salud
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Backend Web3 PDF Registry funcionando correctamente' });
